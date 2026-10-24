@@ -334,17 +334,38 @@ document.addEventListener("keydown",e=>{const k={ArrowLeft:0,ArrowUp:1,ArrowRigh
  if(cur==="g2048")move(k);else if(cur==="gsnake")dir(...[[-1,0],[0,-1],[1,0],[0,1]][k])});
 
 /* Do‘stlar, faollik, chat. DB hozir shu brauzerning xotirasi; haqiqiy server ulanganda faqat DB almashtiriladi */
+/* ===== ONLINE SERVER: Firebase Realtime Database (REST, SDK shart emas) =====
+   FB ga database URL ni qo'ying, masalan "https://loyiha-default-rtdb.firebaseio.com"
+   Bo'sh qoldirsangiz sayt eskicha (faqat shu brauzerda) ishlaydi. */
+const FB="https://game-dd6bb-default-rtdb.firebaseio.com";
+const SK={off:0},snow=()=>Date.now()+SK.off;
+const fbu=(p,q)=>FB.replace(/\/+$/,"")+"/"+p+".json"+(q?"?"+q:"");
+const fb=(m,p,b,q)=>fetch(fbu(p,q),{method:m,body:b===undefined?undefined:JSON.stringify(b)}).then(r=>r.ok?r.json():undefined).catch(()=>undefined);
+let CU={},CC={},pend=0;
+if(FB){const t0=Date.now();fb("PUT","_t",{".sv":"timestamp"}).then(v=>{if(typeof v==="number")SK.off=v-(t0+Date.now())/2})}
+function setAt(root,parts,val,merge){let o=root,k="v";for(const p of parts){if(o[k]==null||typeof o[k]!=="object")o[k]={};o=o[k];k=p}
+ if(merge&&val&&typeof val==="object"){if(o[k]==null||typeof o[k]!=="object")o[k]={};for(const q in val){if(val[q]===null)delete o[k][q];else o[k][q]=val[q]}}
+ else if(val===null){if(parts.length)delete o[k];else o[k]=null}else o[k]=val}
 const DB={g(k,d){try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}},s(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const BOT="oyinbot",UR=/^[a-z0-9_]{3,16}$/,T0=Date.now();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=s=>s<60?s+" soniya":s<3600?Math.floor(s/60)+" daqiqa":Math.floor(s/3600)+" soat "+Math.floor(s%3600/60)+" daqiqa";
-const users=()=>Object.assign({},DB.g("oy3u",{}),{[BOT]:{uid:"bot",name:"Demo bot",seen:Date.now(),total:0,bot:1,b:0,sn:0,xo:0,mem:0,st:0}});
-const on=u=>u.bot||Date.now()-u.seen<15000;
+const users=()=>Object.assign({},FB?CU:DB.g("oy3u",{}),{[BOT]:{uid:"bot",name:"Demo bot",seen:Date.now(),total:0,bot:1,b:0,sn:0,xo:0,mem:0,st:0}});
+const on=u=>u.bot||snow()-u.seen<15000;
 function beat(){if(!S.user)return;const u=DB.g("oy3u",{});u[S.user]={uid:S.uid,name:S.name||S.user,seen:Date.now(),total:S.t};DB.s("oy3u",u)}
-function setU(){const v=$("un").value.trim().toLowerCase().replace(/^@/,""),m=$("um");
+function setU0(){const v=$("un").value.trim().toLowerCase().replace(/^@/,""),m=$("um");
  if(!UR.test(v)){m.textContent="3-16 ta belgi: a-z, 0-9, _";return}
  const u=DB.g("oy3u",{});if(v===BOT||(u[v]&&u[v].uid!==S.uid)){m.textContent="Bu username band";return}
  if(S.user&&S.user!==v)delete u[S.user];DB.s("oy3u",u);S.user=v;save();beat();m.textContent="Saqlandi: @"+v}
+async function setU(){if(!FB)return setU0();
+ const v=$("un").value.trim().toLowerCase().replace(/^@/,""),m=$("um");
+ if(!UR.test(v)){m.textContent="3-16 ta belgi: a-z, 0-9, _";return}
+ if(v===BOT){m.textContent="Bu username band";return}
+ m.textContent="Tekshirilmoqda...";const e=await fb("GET","users/"+v);
+ if(e===undefined){m.textContent="Server bilan ulanib bo‘lmadi. Internetni va FB sozlamasini tekshiring";return}
+ if(e&&e.uid!==S.uid){m.textContent="Bu username band";return}
+ if(S.user&&S.user!==v){fb("DELETE","users/"+S.user);delete CU[S.user]}
+ S.user=v;save();beat();m.textContent="Saqlandi: @"+v}
 let topT="b";
 function topTab(k){topT=k;const s=$("tpSeg");s.innerHTML="";[["r","Rekordlar"],["a","Faollik"]].forEach(([c,n])=>{const b=document.createElement("button");b.textContent=n;b.className=c===k?"on":"";b.onclick=()=>topTab(c);s.appendChild(b)});
  $("rk").style.display=k==="r"?"":"none";$("act").style.display=k==="a"?"":"none";if(k==="r")rank();else act()}
@@ -356,16 +377,17 @@ function fr(){const ok=!!S.user;$("frNo").style.display=ok?"none":"";$("frNo").t
  if(chatW)drawC()}
 function addF(){const k=$("fq").value.trim().toLowerCase().replace(/^@/,""),m=$("fm"),u=users();
  if(!k||k===S.user)m.textContent="Boshqa username kiriting";else if(!u[k])m.textContent="Bunday username topilmadi";else if(S.fr.includes(k))m.textContent="Allaqachon do‘stlarda";else{S.fr.push(k);save();m.textContent="@"+k+" qo‘shildi";$("fq").value=""}fr()}
-const ck=k=>"oy3c_"+[S.user,k].sort().join("|");
-function openC(k){chatW=k;lastN=-1;$("chat").style.display="";$("ct").textContent="@"+k;drawC()}
+const ck=k=>"oy3c_"+[S.user,k].sort().join("~");
+function openC(k){chatW=k;lastN=-1;$("chat").style.display="";$("ct").textContent="@"+k;drawC();pollC()}
 function closeC(){chatW=null;$("chat").style.display="none"}
-function drawC(){const L=DB.g(ck(chatW),[]);if(L.length===lastN)return;lastN=L.length;const b=$("cm");b.innerHTML=L.map(m=>'<div class="bb'+(m.f===S.user?' me':'')+'">'+esc(m.x)+'</div>').join("");b.scrollTop=b.scrollHeight}
-function sendC(){const i=$("ci"),x=i.value.trim();if(!x||!chatW)return;const k=ck(chatW),L=DB.g(k,[]);L.push({f:S.user,x,ts:Date.now()});DB.s(k,L.slice(-200));i.value="";drawC();
+function drawC(){const L=(FB&&chatW!==BOT?CC[ck(chatW)]:DB.g(ck(chatW),[]))||[];if(L.length===lastN)return;lastN=L.length;const b=$("cm");b.innerHTML=L.map(m=>'<div class="bb'+(m.f===S.user?' me':'')+'">'+esc(m.x)+'</div>').join("");b.scrollTop=b.scrollHeight}
+function sendC(){const i=$("ci"),x=i.value.trim();if(!x||!chatW)return;if(FB&&chatW!==BOT){const kk=ck(chatW),msg={f:S.user,x,ts:Date.now()};(CC[kk]=CC[kk]||[]).push(msg);pend++;fb("POST","chats/"+kk,msg).finally(()=>{pend--});i.value="";drawC();return}const k=ck(chatW),L=DB.g(k,[]);L.push({f:S.user,x,ts:Date.now()});DB.s(k,L.slice(-200));i.value="";drawC();
  if(chatW===BOT)setTimeout(()=>{const l=DB.g(k,[]);l.push({f:BOT,x:"Salom! Men demo botman. Haqiqiy do‘stlar bilan yozishish server ulangandan keyin ishlaydi.",ts:Date.now()});DB.s(k,l);if(chatW===BOT)drawC()},700)}
 setInterval(()=>{if(document.visibilityState==="visible"){S.t+=5;save();beat()}if(cur==="top"&&topT==="t")topTab("t");if(cur==="friends")fr()},5000);
 addEventListener("storage",()=>{if(cur==="friends")fr();if(cur==="top"&&topT==="a")act()});
 /* Top: yangi ko‘rinish (yuqoridagi eski topTab/act/beat ni almashtiradi) */
-function beat(){if(!S.user)return;const u=DB.g("oy3u",{});u[S.user]={uid:S.uid,name:S.name||S.user,seen:Date.now(),total:S.t,b:R.b,sn:R.sn,xo:R.xo,mem:R.mem,w:R.w||0,st:S.st||0};DB.s("oy3u",u)}
+function beat(){if(!S.user)return;const o={uid:S.uid,name:S.name||S.user,seen:Date.now(),total:S.t,b:R.b,sn:R.sn,xo:R.xo,mem:R.mem,w:R.w||0,st:S.st||0};
+ if(FB){CU[S.user]=Object.assign({},o,{seen:snow()});fb("PATCH","users/"+S.user,Object.assign({},o,{seen:{".sv":"timestamp"}}))}else{const u=DB.g("oy3u",{});u[S.user]=o;DB.s("oy3u",u)}}
 (function(){const d=new Date().toDateString(),y=new Date(Date.now()-864e5).toDateString();if(S.ld!==d){S.st=S.ld===y?(S.st||0)+1:1;S.ld=d;save()}})();
 const TK=[["b","2048","grid"],["sn","Ilon","snake"],["xo","Krestik-nolik","xo"],["mem","Xotira","mem"],["w","Type","kbd"],["t","Time","trophy"]];
 const AV=["cap","star","smile","rocket"],av=k=>AV[[...k].reduce((a,c)=>a+c.charCodeAt(0),0)%4];
@@ -410,8 +432,25 @@ function mpEnd(){const t=(performance.now()-mp.t0)/1000;if(mp.net)NET.send({t:"f
  $("mpw").textContent=w;nd(w);if(w>(R.w||0)){R.w=w;save();beat()}
  ov('<div class="mpc"><h2>'+(pl===1?"Siz yutdingiz!":"#"+pl+"-o‘rin")+'</h2><div class="rs"><div><b>'+w+'</b><span>WPM</span></div><div><b>'+acc+'%</b><span>Aniqlik</span></div><div><b>'+t.toFixed(1)+'s</b><span>Vaqt</span></div></div><button class="btn grad" onclick="mpReady()">Qayta o‘ynash</button></div>')}
 /* Multiplayer: markaz, tarmoq (BroadcastChannel: server ulanganda shu qism almashtiriladi), X/O */
-const NET={ch:null,id:Math.random().toString(36).slice(2,8),on(f){this.off();this.ch=new BroadcastChannel("oyinlar-mp");this.ch.onmessage=e=>f(e.data)},send(m){if(this.ch)this.ch.postMessage(Object.assign({id:this.id,n:S.name||S.user||"Mehmon"},m))},off(){if(this.ch){this.ch.close();this.ch=null}}};
-const NOBC=typeof BroadcastChannel==="undefined";
+const NETL={id:Math.random().toString(36).slice(2,8),ch:null,now:()=>Date.now(),on(f){this.off();this.ch=new BroadcastChannel("oyinlar-mp");this.ch.onmessage=e=>f(e.data)},send(m){if(this.ch)this.ch.postMessage(Object.assign({id:this.id,n:S.name||S.user||"Mehmon"},m))},off(){if(this.ch){this.ch.close();this.ch=null}}};
+/* Server orqali tarmoq: har bir mijoz o'z tugunini (net/<kanal>/<id>) yozadi, qolganlari SSE orqali real vaqtda tinglaydi */
+const NETF={id:"",es:null,f:null,ch:"",q:[],sq:0,fl:0,dz:0,lp:0,seen:{},init:0,st:{v:null},now:snow,
+ on(f,ch){this.off();this.id=Math.random().toString(36).slice(2,8);this.f=f;this.ch="net/"+(ch||"oyinlar-mp");this.init=0;this.seen={};this.st={v:null};
+  const es=this.es=new EventSource(fbu(this.ch));
+  const h=patch=>e=>{if(this.es!==es)return;let d;try{d=JSON.parse(e.data)}catch(x){return}setAt(this.st,String(d.path).split("/").filter(Boolean),d.data,patch);this.proc()};
+  es.addEventListener("put",h(0));es.addEventListener("patch",h(1))},
+ proc(){const t=this.st.v&&typeof this.st.v==="object"?this.st.v:{},first=!this.init;this.init=1;
+  for(const id in t){if(id===this.id)continue;const raw=t[id]&&t[id].m;if(!raw)continue;
+   const L=Object.values(raw).filter(x=>x&&x.s!=null).sort((a,b)=>a.s-b.s);let last=this.seen[id]||0;
+   for(const m of L)if(m.s>last){last=m.s;if(!first&&this.f){try{this.f(m.d)}catch(e){console.error(e)}}}
+   this.seen[id]=last;
+   if(first&&L.length&&snow()-L[L.length-1].ts>3e5)fb("DELETE",this.ch+"/"+id)}},
+ send(m){if(!this.es)return;const t=Date.now();if(m.t==="p"){if(t-this.lp<120)return;this.lp=t}
+  this.q.push({s:++this.sq,ts:snow(),d:Object.assign({id:this.id,n:S.name||S.user||"Mehmon"},m)});if(this.q.length>8)this.q.shift();this.flush()},
+ flush(){if(this.fl){this.dz=1;return}this.fl=1;this.dz=0;fb("PUT",this.ch+"/"+this.id,{m:this.q}).then(()=>{this.fl=0;if(this.dz&&this.es)this.flush()})},
+ off(){if(this.es){this.es.close();this.es=null;fb("DELETE",this.ch+"/"+this.id)}this.q=[];this.f=null}};
+const NET=FB?NETF:NETL;
+const NOBC=FB?typeof EventSource==="undefined":typeof BroadcastChannel==="undefined";
 function mpHub(){[["race","kbd","Type Race","Mashinada poygalashing: tez yozing.","linear-gradient(135deg,#3b82f6,#22d3ee)"],["xo","xo","Krestik-nolik","Bot yoki do‘st bilan o‘ynang.","linear-gradient(135deg,#ec4899,#f97316)"]].forEach(([k,ic,n,d,bg])=>{const c=document.createElement("button");c.className="card glass";c.innerHTML='<div class="ic" style="background:'+bg+'">'+ico(ic)+'</div><h3>'+n+'</h3><p>'+d+'</p><div class="ar">'+ico("right")+'</div>';c.onclick=()=>mpOpen(k);$("mpCards").appendChild(c)})}
 function mpOpen(k){$("mpHub").style.display="none";$("mpRace").style.display=k==="race"?"":"none";$("mpXO").style.display=k==="xo"?"":"none";if(k==="race")mpReady();else xmReady()}
 function mpBack(){mpStop();NET.off();$("mpHub").style.display="";$("mpRace").style.display="none";$("mpXO").style.display="none"}
@@ -426,10 +465,10 @@ function lobbyInit(){mpStop();mi.value="";mp.txt="";mp.bots=[];mp.peers={};mpDra
   else if(m.t==="f"&&mp.peers[m.id]&&!mp.peers[m.id].f){mp.peers[m.id].f=1;mp.fn++}});
  NET.send({t:"hi"});mp.hb=setInterval(()=>{NET.send({t:"hi"});const now=Date.now();Object.keys(mp.peers).forEach(k=>{if(now-mp.peers[k].seen>4000)delete mp.peers[k]});lobUI()},1500);lobUI()}
 function lobUI(){if(mp.st!=="idle"||mp.cd)return;const k=Object.values(mp.peers);
- ov('<div class="mpc"><h2>Lobbi</h2><p style="color:var(--mut);margin:0 0 14px">'+(k.length?k.map(x=>esc(x.n)).join(", ")+" online":"Hozircha boshqa o‘yinchi yo‘q. Shu sahifani boshqa oynada ham oching.")+'</p>'+(k.length?'<button class="btn grad" onclick="mpStartNet()">Poygani boshlash</button> ':'')+'<button class="btn" style="background:var(--cell)" onclick="mp.md=0;mpReady()">Bot bilan</button></div>')}
-function mpStartNet(){const m={i:Math.floor(Math.random()*MT.length),at:Date.now()+3500};NET.send(Object.assign({t:"go"},m));mpNet(m)}
+ ov('<div class="mpc"><h2>Lobbi</h2><p style="color:var(--mut);margin:0 0 14px">'+(k.length?k.map(x=>esc(x.n)).join(", ")+" online":(FB?"Hozircha boshqa o‘yinchi yo‘q. Do‘stingizga saytni ochishni ayting.":"Hozircha boshqa o‘yinchi yo‘q. Shu sahifani boshqa oynada ham oching."))+'</p>'+(k.length?'<button class="btn grad" onclick="mpStartNet()">Poygani boshlash</button> ':'')+'<button class="btn" style="background:var(--cell)" onclick="mp.md=0;mpReady()">Bot bilan</button></div>')}
+function mpStartNet(){const m={i:Math.floor(Math.random()*MT.length),at:NET.now()+3500};NET.send(Object.assign({t:"go"},m));mpNet(m)}
 function mpNet(m){clearInterval(mp.hb);mp.net=1;mp.cd=1;mp.txt=MT[m.i];mi.value="";mp.keys=mp.err=mp.fn=0;mp.bots=Object.values(mp.peers).slice(0,3);mp.bots.forEach(b=>{b.p=0;b.f=0});mpDraw();mpCars();nd(0);
- mpCd=setInterval(()=>{const r=Math.ceil((m.at-Date.now())/1000);if(r>0)ov('<div class="big">'+r+'</div>');else{clearInterval(mpCd);mp.cd=0;ov("");mpGo()}},100)}
+ mpCd=setInterval(()=>{const r=Math.ceil((m.at-NET.now())/1000);if(r>0)ov('<div class="big">'+r+'</div>');else{clearInterval(mpCd);mp.cd=0;ov("");mpGo()}},100)}
 /* X/O (Multiplayer) */
 let xm={md:0,b:[],me:"X",turn:"X",done:0,room:"",opp:null};
 function xmReady(){NET.off();xm.b=Array(9).fill("");xm.turn="X";xm.done=0;xm.me="X";xm.opp=null;
@@ -445,13 +484,18 @@ function xmBot(){if(xm.done)return;const f=xm.b.map((v,i)=>v?-1:i).filter(i=>i>=
  let m=t("O");if(m===undefined)m=t("X");if(m===undefined)m=xm.b[4]?f[Math.floor(Math.random()*f.length)]:4;xm.b[m]="O";xmAfter("O")}
 function xmJoin(){if(NOBC)return;xm.room=$("xmRc").value.trim()||"1234";xm.opp=null;xm.b=Array(9).fill("");xm.done=0;xm.turn="X";xm.me="X";xmDraw();
  NET.on(m=>{if(m.id===NET.id||m.room!==xm.room)return;
-  if(m.t==="xh"&&!xm.opp){xm.opp=m.id;xm.me="X";NET.send({t:"xa",room:xm.room,to:m.id});$("xmM").textContent="Do‘st ulandi. Siz X, birinchi yuring"}
+  if(m.t==="xh"&&!xm.opp&&(!FB||NET.id<m.id)){xm.opp=m.id;xm.me="X";NET.send({t:"xa",room:xm.room,to:m.id});$("xmM").textContent="Do‘st ulandi. Siz X, birinchi yuring"}
   else if(m.t==="xa"&&m.to===NET.id&&!xm.opp){xm.opp=m.id;xm.me="O";$("xmM").textContent="Ulandi. Siz O, do‘st boshlaydi"}
-  else if(m.t==="xm"&&m.id===xm.opp&&!xm.b[m.i]){xm.b[m.i]=m.from;xmAfter(m.from)}});
- NET.send({t:"xh",room:xm.room});$("xmM").textContent="Do‘st kutilmoqda... (u ham shu kodni kiritsin)"}
+  else if(m.t==="xm"&&m.id===xm.opp&&!xm.b[m.i]){xm.b[m.i]=m.from;xmAfter(m.from)}},"xo_"+xm.room.replace(/[^\w-]/g,"_"));
+ NET.send({t:"xh",room:xm.room});clearInterval(xm.hb);if(FB)xm.hb=setInterval(()=>{if(xm.opp||!NET.es)clearInterval(xm.hb);else NET.send({t:"xh",room:xm.room})},2000);$("xmM").textContent="Do‘st kutilmoqda... (u ham shu kodni kiritsin)"}
 mpHub();
 mpInit();
 beat();
+async function poll(){if(!FB||poll.b)return;poll.b=1;try{const u=await fb("GET","users");if(u!==undefined){CU=u||{};if(cur==="top")topTab(topT);else if(cur==="friends")fr()}}finally{poll.b=0}}
+async function pollC(){if(!FB||!chatW||chatW===BOT||pend||pollC.b)return;pollC.b=1;const k=ck(chatW);
+ try{const d=await fb("GET","chats/"+k,undefined,'orderBy=%22%24key%22&limitToLast=200');
+  if(d!==undefined&&!pend&&chatW&&ck(chatW)===k){CC[k]=d?Object.keys(d).sort().map(i=>d[i]):[];drawC()}}finally{pollC.b=0}}
+poll();setInterval(poll,3000);setInterval(pollC,1500);
 icons();apply();hello();n2048();nSnake();clearInterval(sT);nXO();nMem();
 const h=(location.hash||"").slice(1);show(games.some(g=>g[0]===h)?h:"dash");played=0;$("st3").textContent=0;$("bestTop").textContent=R.b;
 </script>
